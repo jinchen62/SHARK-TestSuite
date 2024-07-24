@@ -144,11 +144,24 @@ def pre_test_onnx_models_azure_download(testsList, cache_path, script_dir):
 
 
 def setup_e2eshark_test(modelpy, testList, sourcedir, model_root_dir):
+    print("\n")
+    print("setup_e2eshark_test\n")
+    cnt = 0
     for model in testList:
-        onnxmodel = sourcedir + "/" + model + ".onnx"
+        # model = model + "_vaiq"
+
+        targetmodelzip = "e2eshark/" + model_root_dir + "/" + model + "/model.onnx.zip"
+        cmd = "az storage blob exists --account-name onnxstorage --container-name onnxstorage"
+        cmd += " --name " + targetmodelzip
+        res = os.popen(cmd).read()
+        if "true" in res:
+            print(f"{model} exists!")
+            continue
+
+        onnxmodel = sourcedir + "/" + model + "/" + model + ".onnx"
         if not os.path.exists(onnxmodel):
             print(f"The file {onnxmodel} does not exist")
-            return
+            continue
 
         testdir = model_root_dir + "/" + model
         if not os.path.exists(testdir):
@@ -175,20 +188,43 @@ def setup_e2eshark_test(modelpy, testList, sourcedir, model_root_dir):
         if os.path.exists(modelpy):
             targetmodelpy = testdir + "/model.py"
             shutil.copy(modelpy, targetmodelpy)
+        cnt += 1
+    print("\n")
+    print(f"set up models: {cnt}")
+    print("\n")
 
 
 def upload_test_to_azure_storage(
     testList, model_root_dir, e2eshark_test_dir, azure_storage_url
 ):
+    print("\n")
+    print("upload_test_to_azure_storage\n")
+    cnt = 0
+    skip = 0
     for model in testList:
+        # model = model + "_vaiq"
         sourcemodelzip = model_root_dir + "/" + model + "/model.onnx.zip"
         targetmodelzip = e2eshark_test_dir + "/" + model + "/model.onnx.zip"
+
+        cmd = "az storage blob exists --account-name onnxstorage --container-name onnxstorage"
+        cmd += " --name " + targetmodelzip
+        res = os.popen(cmd).read()
+        if "true" in res:
+            print(f"{model} exists!")
+            skip += 1
+            continue
+
         command = "az storage blob upload --overwrite --account-name onnxstorage --container-name onnxstorage"
         command += " --name " + targetmodelzip
         command += " --file " + sourcemodelzip + " --auth-mode key"
         url = azure_storage_url + "/" + targetmodelzip
         print(f"{url}")
         os.system(command)
+        cnt += 1
+    print("\n")
+    print(f"upload models: {cnt}")
+    print(f"skip models: {skip}")
+    print("\n")
 
 
 if __name__ == "__main__":
@@ -201,23 +237,26 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s",
         "--sourcedir",
+        default="/proj/ipu_models/hug_fc/fp32",
         help="The source directory with <modelname>.onnx for setting up test(s)",
     )
     parser.add_argument(
         "-m",
         "--modelpy",
+        default="onnx/models/resnet50_vaiq_int8/model.py",
         help="The source template model.py to use for test setup",
     )
     parser.add_argument(
         "-c",
         "--cachedir",
+        default="/proj/gdba/shark/cache",
         help="The cache directory into which model from Azure Storage should be downloaded",
     )
     parser.add_argument(
         "--setup",
         help="Copy source <modelname>.onnx from argument of --sourcedir and setup a e2eshark onnx model test",
         action="store_true",
-        default=False,
+        default=True,
     )
     parser.add_argument(
         "--cleanup",
@@ -229,7 +268,7 @@ if __name__ == "__main__":
         "--upload",
         help="Upload test(s) to Azure Storage",
         action="store_true",
-        default=False,
+        default=True,
     )
     parser.add_argument(
         "--download",
